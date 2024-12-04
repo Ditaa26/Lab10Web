@@ -196,7 +196,7 @@ class Database {
 }
 ?>
 ```
-## selanjutnya membuat table baru di database latihan1  
+## Selanjutnya membuat table baru di database latihan1  
 ``` sh
 MariaDB [(none)]> use latihan1;
 Database changed
@@ -272,12 +272,247 @@ if ($deleted) {
 }
 ?>
 ```
-![image](https://github.com/user-attachments/assets/f715fe4a-4729-4718-bc36-4fc788c53161)
-![image](https://github.com/user-attachments/assets/2fd3f43b-8861-4efb-a535-9b34d50fab0d) 
+![image](https://github.com/user-attachments/assets/f715fe4a-4729-4718-bc36-4fc788c53161)  
+![image](https://github.com/user-attachments/assets/2fd3f43b-8861-4efb-a535-9b34d50fab0d)   
 Kode PHP ini berfungsi untuk menghubungkan aplikasi dengan database MariaDB menggunakan kelas Database, yang menangani operasi CRUD (Create, Read, Update, Delete). Pertama, kelas ini memuat konfigurasi database melalui file config.php dan membuat objek koneksi ke database latihan1 dengan menggunakan kredensial yang telah ditentukan. Setelah berhasil terkoneksi, kode ini menguji operasi SELECT untuk mengambil data pengguna dengan ID 1, operasi UPDATE untuk memperbarui nama dan email pengguna dengan ID 1, serta operasi DELETE untuk menghapus pengguna dengan ID 2. Hasil dari setiap operasi akan ditampilkan melalui pesan di browser, memberikan feedback mengenai keberhasilan atau kegagalan setiap operasi.  
 
 # TUGAS 
 Implementasikan konsep modularisasi pada kode program pada praktikum sebelumnya dengan menggunakan class library untuk form dan database connection.  
+## A. Membuat file database2.php
+```sh
+<?php
+class Database {
+    protected $host;
+    protected $user;
+    protected $password;
+    protected $db_name;
+    protected $conn;
+
+    public function __construct() {
+        $this->getConfig();
+        // Cek koneksi sebelum melanjutkan
+        $this->conn = new mysqli($this->host, $this->user, $this->password, $this->db_name);
+
+        if ($this->conn->connect_error) {
+            die("Connection failed: " . $this->conn->connect_error);
+        }
+    }
+
+    private function getConfig() {
+        include_once("config.php");
+        global $config;
+        $this->host = $config['host'];
+        $this->user = $config['username'];
+        $this->password = $config['password'];
+        $this->db_name = $config['db_name'];
+    }
+
+    public function query($sql) {
+        try {
+            $result = $this->conn->query($sql);
+            if ($result === false) {
+                throw new Exception("SQL Error: " . $this->conn->error);
+            }
+            return $result;
+        } catch (Exception $e) {
+            die("Database Query Error: " . $e->getMessage());
+        }
+    }
+
+    public function insert($table, $data) {
+        if (is_array($data)) {
+            $columns = implode(", ", array_keys($data)); // Kolom: nama, email
+            $values = implode(", ", array_map(fn($val) => "'{$this->conn->real_escape_string($val)}'", $data));
+            $sql = "INSERT INTO $table ($columns) VALUES ($values)";
+            return $this->query($sql);
+        }
+        return false;
+    }
+
+    public function get($table, $where = null) {
+        $condition = $where ? " WHERE $where" : "";
+        $sql = "SELECT * FROM `$table`$condition";
+        $result = $this->query($sql);
+        return $result->fetch_assoc();
+    }
+
+    public function update($table, $data, $where) {
+        if (is_array($data)) {
+            $update_values = implode(", ", array_map(function ($key, $val) {
+                return "$key = '" . $this->conn->real_escape_string($val) . "'";
+            }, array_keys($data), $data));
+            $sql = "UPDATE `$table` SET $update_values WHERE $where";
+            return $this->query($sql);
+        }
+        return false;
+    }
+
+    public function delete($table, $filter) {
+        if (!empty($filter)) {
+            $sql = "DELETE FROM `$table` WHERE $filter";
+            return $this->query($sql);
+        }
+        return false;
+    }
+
+    public function close() {
+        $this->conn->close();
+    }
+}
+?>
+```
+## B. file form2.php 
+```sh
+<?php
+class Form {
+    private $fields = [];
+    private $action;
+    private $submit;
+
+    public function __construct($action, $submit) {
+        $this->action = $action;
+        $this->submit = $submit;
+    }
+
+    public function addField($name, $label) {
+        $this->fields[] = ['name' => $name, 'label' => $label];
+    }
+
+    public function displayForm() {
+        echo "<form action='{$this->action}' method='POST'>";
+        echo "<table>";
+        foreach ($this->fields as $field) {
+            echo "<tr>
+                    <td>{$field['label']}</td>
+                    <td><input type='text' name='{$field['name']}'></td>
+                  </tr>";
+        }
+        echo "<tr>
+                <td colspan='2'><button type='submit'>{$this->submit}</button></td>
+              </tr>";
+        echo "</table>";
+        echo "</form>";
+    }
+}
+?>
+```
+## C. form_input2.php
+```sh
+<?php
+include_once 'form2.php';
+include_once 'database2.php';
+
+// Menampilkan form
+echo "<html><head><title>Mahasiswa</title></head><body>";
+$form = new Form("insert.php", "Submit Data");
+$form->addField("nama", "Nama");
+$form->addField("email", "Email");
+echo "<h3>Silakan isi form berikut:</h3>";
+$form->displayForm();
+echo "</body></html>";
+?>
+```
+## D. file config.php
+```sh
+<?php
+$config = [
+    'host' => 'localhost',
+    'username' => 'root', 
+    'password' => '',    
+    'db_name' => 'latihan1' 
+];
+?>
+```
+
+## E. file insert.php
+```sh
+<?php
+include_once 'config.php';
+include_once 'database2.php';
+
+// Proses data dari form
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nama = $_POST['nama'];
+    $email = $_POST['email'];
+
+    $db = new Database();
+    $data = [
+        'nama' => $nama,
+        'email' => $email
+    ];
+
+    // Menyimpan data ke tabel users
+    if ($db->insert('users', $data)) {
+        echo "Data berhasil disimpan!";
+    } else {
+        echo "Gagal menyimpan data!";
+    }
+}
+?>
+```
+![image](https://github.com/user-attachments/assets/4f5e8cd8-7d96-4d9e-9e4f-f6d2033618b0)
+![image](https://github.com/user-attachments/assets/f704e93b-aeae-49ac-ab75-d3d5a9d0ca3b) 
+![image](https://github.com/user-attachments/assets/06be7e35-ae10-4bb6-ba32-db461b10a51b) 
+![image](https://github.com/user-attachments/assets/9495e6ee-e003-47c9-bdf0-bd0450b55b76)
+
+## Menguji database 
+#### file uji.php 
+```sh
+<?php
+include_once 'config.php';
+include_once 'database2.php';
+
+// Membuat objek Database dan menghubungkan ke database
+try {
+    $db = new Database();  // Membuat objek database
+    echo "Koneksi ke database berhasil!<br>";
+} catch (Exception $e) {
+    echo "Koneksi gagal: " . $e->getMessage();
+}
+
+// Menguji operasi SELECT
+$user = $db->get('users', 'id = 7');  
+if ($user) {
+    echo "Data User ID 7: <br>";
+    echo "Nama: " . $user['nama'] . "<br>";
+    echo "Email: " . $user['email'] . "<br>";
+} else {
+    echo "User tidak ditemukan.<br>";
+}
+
+// Menguji operasi UPDATE
+$updateData = [
+    'nama' => 'lala',
+    'email' => 'lala@gmail.com'
+];
+$updated = $db->update('users', $updateData, 'id = 4');
+if ($updated) {
+    echo "Data berhasil diperbarui!<br>";
+} else {
+    echo "Gagal memperbarui data.<br>";
+}
+
+// Menguji operasi DELETE
+$deleted = $db->delete('users', 'id = 1');  
+if ($deleted) {
+    echo "Data berhasil dihapus!<br>";
+} else {
+    echo "Gagal menghapus data.<br>";
+}
+?>
+```  
+![image](https://github.com/user-attachments/assets/16fd825e-06da-402f-9860-f0b4e6663fc1)  
+## Before:   
+![image](https://github.com/user-attachments/assets/3a4fd44c-3816-41a3-a752-9f1522aec2b5)  
+## After:  
+![image](https://github.com/user-attachments/assets/9df29f5b-544a-4929-976a-d395cb1b6c5d)  
+
+
+
+
+
+
+
 
 
 
